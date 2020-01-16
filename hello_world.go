@@ -10,11 +10,11 @@ const (
 )
 
 func HelloWorld(w http.ResponseWriter, r *http.Request) {
-	fmt.Print(w, "Hello world")
+	fmt.Fprint(w, "Hello world")
 }
 
 func HealthCheck(w http.ResponseWriter, r *http.Request) {
-	fmt.Print(w, "I'm running")
+	fmt.Fprint(w, "I'm running")
 }
 
 func main() {
