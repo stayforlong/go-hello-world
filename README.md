@@ -10,7 +10,7 @@ Simple HTTP Hello World in Golang
 From the root of this repository run `make docker-build` and the binary will be located in `./out/` directory (the binary will be compiled for `linux amd64` platform only).
 
 # Run
-Just execute the binary and the web server will be available at port `80`
+Just execute the binary and the webserver will be available at port `80`
 
 ### Endpoints
 
