@@ -11,4 +11,37 @@
     - $(aws ecr get-login-password --region {{ aws_region }} | docker login --username AWS --password-stdin {{ ecr_repo.repository.repositoryUri }})
     - docker tag stayforlong:hello_world {{ ecr_repo.repository.repositoryUri }}:latest
     - docker push {{ ecr_repo.repository.repositoryUri }}:latest
-  
+
+- name: Create a new EC2 key
+  ec2_key:
+    name: "{{ env }}"
+    region: "{{ aws_region }}"
+  register: key_pair  
+
+- name: Save private key
+  copy: content="{{ key_pair.key.private_key }}" dest="{{ env }}.pem" mode=0600
+  when: key_pair.changed
+
+- name: Deploy VPC CloudFormation infrastructure
+  cloudformation:
+    stack_name: "VPC-{{ env }}"
+    state: present
+    region: "{{ aws_region }}"
+    template: "roles/cloudformation/files/vpc.yml"
+    template_parameters:
+      Env: "{{ env }}"
+    tags:
+      Stack: "VPC-{{ env }}"
+
+- name: Deploy ECS Cluster CloudFormation infrastructure
+  cloudformation:
+    stack_name: "ECS-{{ env }}"
+    state: present
+    region: "{{ aws_region }}"
+    template: "roles/cloudformation/files/ecs-cluster.yml"
+    template_parameters:
+      Env: "{{ env }}"
+      myIP: "{{ IP }}"
+      InstanceTypes: "{{ instance_types }}"
+    tags:
+      Stack: "ECS-{{ env }}"

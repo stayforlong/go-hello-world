@@ -1,1 +1,5 @@
-aws_region: eu-west-1
+env: dev
+aws_region: eu-central-1
+
+IP: 37.98.200.95/32
+instance_types: t3.micro, t3.small, t3.medium
