@@ -1,0 +1,14 @@
+- name: Create ECR repository
+  ecs_ecr: 
+    name: stayforlong-challenge
+    region: "{{ aws_region }}"
+  register: ecr_repo
+
+- name: Build and Push docker image
+  shell: "{{ item }}"
+  with_items:
+    - bash -lc "cd ../ && make all"
+    - $(aws ecr get-login-password --region {{ aws_region }} | docker login --username AWS --password-stdin {{ ecr_repo.repository.repositoryUri }})
+    - docker tag stayforlong:hello_world {{ ecr_repo.repository.repositoryUri }}:latest
+    - docker push {{ ecr_repo.repository.repositoryUri }}:latest
+  
