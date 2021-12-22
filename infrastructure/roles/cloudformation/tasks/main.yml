@@ -45,3 +45,16 @@
       InstanceTypes: "{{ instance_types }}"
     tags:
       Stack: "ECS-{{ env }}"
+
+- name: Deploy ECS Service CloudFormation infrastructure
+  cloudformation:
+    stack_name: "ECS-{{ service_name }}-{{ env }}"
+    state: present
+    region: "{{ aws_region }}"
+    template: "roles/cloudformation/files/ecs-service.yml"
+    template_parameters:
+      Env: "{{ env }}"
+      DockerImage: "{{ ecr_repo.repository.repositoryUri }}:latest"
+      ServiceName: "{{ service_name }}"
+    tags:
+      Stack: "ECS-{{ service_name }}-{{ env }}"

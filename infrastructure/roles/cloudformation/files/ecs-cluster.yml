@@ -49,7 +49,7 @@ Resources:
     Properties:
       VPCZoneIdentifier: 
         - Fn::ImportValue: !Sub '${Env}-PublicSubnet1'
-        - Fn::ImportValue: !Sub '${Env}-PubliSubnet2'
+        - Fn::ImportValue: !Sub '${Env}-PublicSubnet2'
         - Fn::ImportValue: !Sub '${Env}-PublicSubnet3'
       MixedInstancesPolicy:
         LaunchTemplate:
