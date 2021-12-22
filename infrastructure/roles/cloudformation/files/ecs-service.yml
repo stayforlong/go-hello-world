@@ -1,0 +1,192 @@
+Description: Stack for create ECS service, this template is based on AWS public template
+Parameters:
+  Env:
+    Description: Environment
+    Type: String
+  DockerImage:
+    Description: Docker Image
+    Type: String
+  ServiceName:
+    Description: Service Name
+    Type: String
+Resources:
+  ALBSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: ALB Security Group
+      VpcId: 
+        Fn::ImportValue: !Sub '${Env}-VPC'
+  ALBSecurityGroupIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref ALBSecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIp: '0.0.0.0/0'
+  EcsSecurityGroupALBports:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: 
+        Fn::ImportValue: !Sub '${Env}-EcsSecurityGroup'
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 65535
+      SourceSecurityGroupId: !Ref ALBSecurityGroup
+  taskdefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: !Ref 'AWS::StackName'
+      ContainerDefinitions:
+        - Name: !Sub '${Env}-${ServiceName}'
+          Cpu: '10'
+          Essential: 'true'
+          Image: !Ref DockerImage
+          Memory: '300'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: 
+                Fn::ImportValue: !Sub '${Env}-CloudwatchLogsGroup'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: !Sub '${Env}-${ServiceName}'
+          PortMappings:
+            - ContainerPort: 80
+  ECSALB:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: !Sub ECSALB-${ServiceName}
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '30'
+      Subnets: 
+        - Fn::ImportValue: !Sub '${Env}-PublicSubnet1'
+        - Fn::ImportValue: !Sub '${Env}-PublicSubnet2'
+        - Fn::ImportValue: !Sub '${Env}-PublicSubnet3'
+      SecurityGroups: 
+        - !Ref ALBSecurityGroup
+  ALBListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ECSTG
+      LoadBalancerArn: !Ref ECSALB
+      Port: '80'
+      Protocol: HTTP
+  ECSALBListenerRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    DependsOn: ALBListener
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref ECSTG
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /
+      ListenerArn: !Ref ALBListener
+      Priority: 1
+  ECSTG:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    DependsOn: ECSALB
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Name: ECSTG
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: 
+        Fn::ImportValue: !Sub '${Env}-VPC'
+  service:
+    Type: 'AWS::ECS::Service'
+    DependsOn: ALBListener
+    Properties:
+      Cluster: 
+        Fn::ImportValue: !Sub '${Env}-ECSCluster'
+      DesiredCount: '1'
+      LoadBalancers:
+        - ContainerName: !Sub '${Env}-${ServiceName}'
+          ContainerPort: '80'
+          TargetGroupArn: !Ref ECSTG
+      Role: 
+        Fn::ImportValue: !Sub '${Env}-ECSServiceRole'
+      TaskDefinition: !Ref taskdefinition
+  ServiceScalingTarget:
+    Type: 'AWS::ApplicationAutoScaling::ScalableTarget'
+    DependsOn: service
+    Properties:
+      MaxCapacity: 10
+      MinCapacity: 1
+      ResourceId: !Join 
+        - ''
+        - - service/
+          - Fn::ImportValue: !Sub '${Env}-ECSCluster'
+          - /
+          - !GetAtt 
+            - service
+            - Name
+      RoleARN: !GetAtt 
+        - AutoscalingRole
+        - Arn
+      ScalableDimension: 'ecs:service:DesiredCount'
+      ServiceNamespace: ecs
+  ServiceScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: AStepPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 70.0
+  AutoscalingRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - application-autoscaling.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: service-autoscaling
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'application-autoscaling:*'
+                  - 'cloudwatch:DescribeAlarms'
+                  - 'cloudwatch:PutMetricAlarm'
+                  - 'ecs:DescribeServices'
+                  - 'ecs:UpdateService'
+                Resource: '*'
+Outputs:
+  ecsservice:
+    Description: ecsservice
+    Value: !Ref service
+    Export:
+      Name: !Sub '${Env}-${ServiceName}-ecsservice'
+  ECSALB:
+    Description: ALB DNS URL
+    Value: !Join 
+      - ''
+      - - !GetAtt 
+          - ECSALB
+          - DNSName
+    Export:
+      Name: !Sub '${Env}-${ServiceName}-ECSALB'
+  taskdef:
+    Description: taskdefinition
+    Value: !Ref taskdefinition
+    Export:
+      Name: !Sub '${Env}-${ServiceName}-taskdefinition'
