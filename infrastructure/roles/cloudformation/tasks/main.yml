@@ -58,3 +58,15 @@
       ServiceName: "{{ service_name }}"
     tags:
       Stack: "ECS-{{ service_name }}-{{ env }}"
+
+- name: Get CloudFormation Stack Info
+  cloudformation_info:
+    stack_name: "ECS-{{ service_name }}-{{ env }}"
+    region: "{{ aws_region }}"
+  register: output
+
+- name: ALB DNS
+  debug:
+    msg: "{{ output['cloudformation'][stack_name]['stack_outputs']['ECSALB'] }}"
+  vars:
+    stack_name: "ECS-{{ service_name }}-{{ env }}"

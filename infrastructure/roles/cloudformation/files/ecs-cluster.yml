@@ -129,6 +129,10 @@ Resources:
                   - 'ecs:Submit*'
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
+                  - 'ecr:Get*'
+                  - 'ecr:Describe*'
+                  - 'ecr:List*'
+                  - 'ecr:Batch*'
                 Resource: '*'
   EC2InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
@@ -187,3 +191,8 @@ Outputs:
     Value: !Ref ECSServiceRole
     Export:
       Name: !Sub '${Env}-ECSServiceRole'
+  ECSCluster:
+    Description: ECSCluster
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub '${Env}-ECSCluster'
