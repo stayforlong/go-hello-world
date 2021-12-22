@@ -48,9 +48,9 @@ Resources:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
       VPCZoneIdentifier: 
-        - Fn::ImportValue: !Sub '${Env}-NatSubnet1'
-        - Fn::ImportValue: !Sub '${Env}-NatSubnet2'
-        - Fn::ImportValue: !Sub '${Env}-NatSubnet3'
+        - Fn::ImportValue: !Sub '${Env}-PublicSubnet1'
+        - Fn::ImportValue: !Sub '${Env}-PubliSubnet2'
+        - Fn::ImportValue: !Sub '${Env}-PublicSubnet3'
       MixedInstancesPolicy:
         LaunchTemplate:
           LaunchTemplateSpecification: 
@@ -130,7 +130,22 @@ Resources:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
                 Resource: '*'
-  AutoscalingRole:
+  EC2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref EC2Role
+  
+  CloudwatchLogsGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Join 
+        - '-'
+        - - !Sub ${Env}-ECSLogGroup
+          - !Ref 'AWS::StackName'
+      RetentionInDays: 14
+  ECSServiceRole:
     Type: 'AWS::IAM::Role'
     Properties:
       AssumeRolePolicyDocument:
@@ -138,25 +153,37 @@ Resources:
           - Effect: Allow
             Principal:
               Service:
-                - application-autoscaling.amazonaws.com
+                - ecs.amazonaws.com
             Action:
               - 'sts:AssumeRole'
       Path: /
       Policies:
-        - PolicyName: service-autoscaling
+        - PolicyName: ecs-service
           PolicyDocument:
             Statement:
               - Effect: Allow
                 Action:
-                  - 'application-autoscaling:*'
-                  - 'cloudwatch:DescribeAlarms'
-                  - 'cloudwatch:PutMetricAlarm'
-                  - 'ecs:DescribeServices'
-                  - 'ecs:UpdateService'
+                  - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+                  - 'elasticloadbalancing:DeregisterTargets'
+                  - 'elasticloadbalancing:Describe*'
+                  - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+                  - 'elasticloadbalancing:RegisterTargets'
+                  - 'ec2:Describe*'
+                  - 'ec2:AuthorizeSecurityGroupIngress'
                 Resource: '*'
-  EC2InstanceProfile:
-    Type: 'AWS::IAM::InstanceProfile'
-    Properties:
-      Path: /
-      Roles:
-        - !Ref EC2Role
+Outputs:
+  EcsSecurityGroup:
+    Description: EcsSecurityGroup
+    Value: !Ref EcsSecurityGroup
+    Export:
+      Name: !Sub '${Env}-EcsSecurityGroup'
+  CloudwatchLogsGroup:
+    Description: CloudwatchLogsGroup
+    Value: !Ref CloudwatchLogsGroup
+    Export:
+      Name: !Sub '${Env}-CloudwatchLogsGroup'
+  ECSServiceRole:
+    Description: ECSServiceRole
+    Value: !Ref ECSServiceRole
+    Export:
+      Name: !Sub '${Env}-ECSServiceRole'
